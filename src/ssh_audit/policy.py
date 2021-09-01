@@ -1,7 +1,7 @@
 """
    The MIT License (MIT)
 
-   Copyright (C) 2020 Joe Testa (jtesta@positronsecurity.com)
+   Copyright (C) 2020-2021 Joe Testa (jtesta@positronsecurity.com)
 
    Permission is hereby granted, free of charge, to any person obtaining a copy
    of this software and associated documentation files (the "Software"), to deal
@@ -67,6 +67,10 @@ class Policy:
 
         'Hardened OpenSSH Server v8.5 (version 1)': {'version': '1', 'banner': None, 'compressions': None, 'host_keys': ['rsa-sha2-512', 'rsa-sha2-256', 'ssh-ed25519'], 'optional_host_keys': ['sk-ssh-ed25519@openssh.com', 'ssh-ed25519-cert-v01@openssh.com', 'sk-ssh-ed25519-cert-v01@openssh.com', 'rsa-sha2-256-cert-v01@openssh.com', 'rsa-sha2-512-cert-v01@openssh.com'], 'kex': ['curve25519-sha256', 'curve25519-sha256@libssh.org', 'diffie-hellman-group16-sha512', 'diffie-hellman-group18-sha512', 'diffie-hellman-group-exchange-sha256'], 'ciphers': ['chacha20-poly1305@openssh.com', 'aes256-gcm@openssh.com', 'aes128-gcm@openssh.com', 'aes256-ctr', 'aes192-ctr', 'aes128-ctr'], 'macs': ['hmac-sha2-256-etm@openssh.com', 'hmac-sha2-512-etm@openssh.com', 'umac-128-etm@openssh.com'], 'hostkey_sizes': {'rsa-sha2-256': 4096, 'rsa-sha2-512': 4096}, 'cakey_sizes': {'rsa-sha2-256-cert-v01@openssh.com': 4096, 'rsa-sha2-512-cert-v01@openssh.com': 4096}, 'dh_modulus_sizes': {'diffie-hellman-group-exchange-sha256': 2048}, 'server_policy': True},
 
+        'Hardened OpenSSH Server v8.6 (version 1)': {'version': '1', 'banner': None, 'compressions': None, 'host_keys': ['rsa-sha2-512', 'rsa-sha2-256', 'ssh-ed25519'], 'optional_host_keys': ['sk-ssh-ed25519@openssh.com', 'ssh-ed25519-cert-v01@openssh.com', 'sk-ssh-ed25519-cert-v01@openssh.com', 'rsa-sha2-256-cert-v01@openssh.com', 'rsa-sha2-512-cert-v01@openssh.com'], 'kex': ['curve25519-sha256', 'curve25519-sha256@libssh.org', 'diffie-hellman-group16-sha512', 'diffie-hellman-group18-sha512', 'diffie-hellman-group-exchange-sha256'], 'ciphers': ['chacha20-poly1305@openssh.com', 'aes256-gcm@openssh.com', 'aes128-gcm@openssh.com', 'aes256-ctr', 'aes192-ctr', 'aes128-ctr'], 'macs': ['hmac-sha2-256-etm@openssh.com', 'hmac-sha2-512-etm@openssh.com', 'umac-128-etm@openssh.com'], 'hostkey_sizes': {'rsa-sha2-256': 4096, 'rsa-sha2-512': 4096}, 'cakey_sizes': {'rsa-sha2-256-cert-v01@openssh.com': 4096, 'rsa-sha2-512-cert-v01@openssh.com': 4096}, 'dh_modulus_sizes': {'diffie-hellman-group-exchange-sha256': 2048}, 'server_policy': True},
+
+        'Hardened OpenSSH Server v8.7 (version 1)': {'version': '1', 'banner': None, 'compressions': None, 'host_keys': ['rsa-sha2-512', 'rsa-sha2-256', 'ssh-ed25519'], 'optional_host_keys': ['sk-ssh-ed25519@openssh.com', 'ssh-ed25519-cert-v01@openssh.com', 'sk-ssh-ed25519-cert-v01@openssh.com', 'rsa-sha2-256-cert-v01@openssh.com', 'rsa-sha2-512-cert-v01@openssh.com'], 'kex': ['curve25519-sha256', 'curve25519-sha256@libssh.org', 'diffie-hellman-group16-sha512', 'diffie-hellman-group18-sha512', 'diffie-hellman-group-exchange-sha256'], 'ciphers': ['chacha20-poly1305@openssh.com', 'aes256-gcm@openssh.com', 'aes128-gcm@openssh.com', 'aes256-ctr', 'aes192-ctr', 'aes128-ctr'], 'macs': ['hmac-sha2-256-etm@openssh.com', 'hmac-sha2-512-etm@openssh.com', 'umac-128-etm@openssh.com'], 'hostkey_sizes': {'rsa-sha2-256': 4096, 'rsa-sha2-512': 4096}, 'cakey_sizes': {'rsa-sha2-256-cert-v01@openssh.com': 4096, 'rsa-sha2-512-cert-v01@openssh.com': 4096}, 'dh_modulus_sizes': {'diffie-hellman-group-exchange-sha256': 2048}, 'server_policy': True},
+
 
         # Ubuntu Client policies
 
@@ -113,7 +117,7 @@ class Policy:
 
         if policy_file is not None:
             try:
-                with open(policy_file, "r") as f:
+                with open(policy_file, "r", encoding='utf-8') as f:
                     policy_data = f.read()
             except FileNotFoundError:
                 print("Error: policy file not found: %s" % policy_file)
@@ -421,8 +425,8 @@ macs = %s
         server_policy_names = []
         client_policy_names = []
 
-        for policy_name in Policy.BUILTIN_POLICIES:
-            if Policy.BUILTIN_POLICIES[policy_name]['server_policy']:
+        for policy_name, policy in Policy.BUILTIN_POLICIES.items():
+            if policy['server_policy']:
                 server_policy_names.append(policy_name)
             else:
                 client_policy_names.append(policy_name)

@@ -1,10 +1,10 @@
 # ssh-audit
-[![Build Status](https://travis-ci.org/jtesta/ssh-audit.svg?branch=master)](https://travis-ci.org/jtesta/ssh-audit)
-<!--
-[![appveyor build status](https://ci.appveyor.com/api/projects/status/4m5r73m0r023edil/branch/develop?svg=true)](https://ci.appveyor.com/project/arthepsy/ssh-audit)
-[![codecov](https://codecov.io/gh/arthepsy/ssh-audit/branch/develop/graph/badge.svg)](https://codecov.io/gh/arthepsy/ssh-audit)
-[![Quality Gate](https://sonarqube.com/api/badges/gate?key=arthepsy-github%3Assh-audit%3Adevelop&template=ROUNDED)](https://sq.evolutiongaming.com/dashboard?id=arthepsy-github%3Assh-audit%3Adevelop)  
--->
+[![License](https://img.shields.io/badge/license-MIT-brightgreen.svg)](https://github.com/jtesta/ssh-audit/blob/master/LICENSE)
+[![PyPI Downloads](https://img.shields.io/pypi/dm/ssh-audit)](https://pypi.org/project/ssh-audit/)
+[![Docker Pulls](https://img.shields.io/docker/pulls/positronsecurity/ssh-audit)](https://hub.docker.com/r/positronsecurity/ssh-audit)
+[![Build Status](https://github.com/jtesta/ssh-audit/actions/workflows/tox.yaml/badge.svg)](https://github.com/jtesta/ssh-audit/actions)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/jtesta/ssh-audit/blob/master/CONTRIBUTING.md)
+
 **ssh-audit** is a tool for ssh server & client configuration auditing.
 
 [jtesta/ssh-audit](https://github.com/jtesta/ssh-audit/) (v2.0+) is the updated and maintained version of ssh-audit forked from [arthepsy/ssh-audit](https://github.com/arthepsy/ssh-audit) (v1.x) due to inactivity.
@@ -71,9 +71,9 @@ usage: ssh-audit.py [options] <host>
                                    targets (-T/--targets) (default: 32)
    -v,  --verbose          verbose output
 ```
-* if both IPv4 and IPv6 are used, order of precedence can be set by using either `-46` or `-64`.  
-* batch flag `-b` will output sections without header and without empty lines (implies verbose flag).  
-* verbose flag `-v` will prefix each line with section type and algorithm name.  
+* if both IPv4 and IPv6 are used, order of precedence can be set by using either `-46` or `-64`.
+* batch flag `-b` will output sections without header and without empty lines (implies verbose flag).
+* verbose flag `-v` will prefix each line with section type and algorithm name.
 * an exit code of 0 is returned when all algorithms are considered secure (for a standard audit), or when a policy check passes (for a policy audit).
 
 Basic server auditing:
@@ -148,7 +148,7 @@ Below is a screen shot of the client-auditing output when an unhardened OpenSSH 
 Guides to harden server & client configuration can be found here: [https://www.ssh-audit.com/hardening_guides.html](https://www.ssh-audit.com/hardening_guides.html)
 
 ## Pre-Built Packages
-Pre-built packages are available for Windows (see the releases page), on PyPI, Snap, and Homebrew.
+Pre-built packages are available for Windows (see the releases page), PyPI, Snap, and Docker.
 
 To install from PyPI:
 ```
@@ -158,11 +158,6 @@ $ pip3 install ssh-audit
 To install the Snap package:
 ```
 $ snap install ssh-audit
-```
-
-To install on Homebrew:
-```
-$ brew install ssh-audit
 ```
 
 To install from Dockerhub:
@@ -175,7 +170,7 @@ $ docker pull positronsecurity/ssh-audit
 For convenience, a web front-end on top of the command-line tool is available at [https://www.ssh-audit.com/](https://www.ssh-audit.com/).
 
 ## ChangeLog
-### v2.5.0-dev (???)
+### v2.5.0 (2021-08-26)
  - Fixed crash when running host key tests.
  - Handles server connection failures more gracefully.
  - Now prints JSON with indents when `-jj` is used (useful for debugging).
@@ -183,6 +178,7 @@ For convenience, a web front-end on top of the command-line tool is available at
  - Added `-d`/`--debug` option for getting debugging output; credit [Adam Russell](https://github.com/thecliguy).
  - Updated JSON output to include MD5 fingerprints.  Note that this results in a breaking change in the 'fingerprints' dictionary format.
  - Updated OpenSSH 8.1 (and earlier) policies to include `rsa-sha2-512` and `rsa-sha2-256`.
+ - Added OpenSSH v8.6 & v8.7 policies.
  - Added 3 new key exchanges: `gss-gex-sha1-eipGX3TCiQSrx573bT1o1Q==`, `gss-group1-sha1-eipGX3TCiQSrx573bT1o1Q==`, and `gss-group14-sha1-eipGX3TCiQSrx573bT1o1Q==`.
  - Added 3 new MACs: `hmac-ripemd160-96`, `AEAD_AES_128_GCM`, and `AEAD_AES_256_GCM`.
 
@@ -303,18 +299,18 @@ For convenience, a web front-end on top of the command-line tool is available at
 
 ### v1.0.20160207
  - use OpenSSH 7.2 banner
- - additional warnings for OpenSSH 7.2 
+ - additional warnings for OpenSSH 7.2
  - fix OpenSSH 7.0 failure messages
  - add rijndael-cbc failure message from OpenSSH 6.7
 
 ### v1.0.20160105
  - multiple additional warnings
  - support for none algorithm
- - better compression handling  
- - ensure reading enough data (fixes few Linux SSH)  
+ - better compression handling
+ - ensure reading enough data (fixes few Linux SSH)
 
 ### v1.0.20151230
- - Dropbear SSH support  
+ - Dropbear SSH support
 
 ### v1.0.20151223
- - initial version  
+ - initial version
