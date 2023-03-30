@@ -32,7 +32,7 @@
 - historical information from OpenSSH, Dropbear SSH and libssh;
 - policy scans to ensure adherence to a hardened/standard configuration;
 - runs on Linux and Windows;
-- supports Python 3.6 - 3.9;
+- supports Python 3.7 - 3.11;
 - no dependencies
 
 ## Usage
@@ -49,7 +49,9 @@ usage: ssh-audit.py [options] <host>
                                software config (use -p to change port;
                                use -t to change timeout)
    -d,  --debug            Enable debug output.
-   -g,  --gex-test=<x[,y,...] | min:pref:max[,min:pref:max,...] | x-y[:step]>  dh gex modulus size test
+   -g,  --gex-test=<x[,y,...]>  dh gex modulus size test
+                   <min1:pref1:max1[,min2:pref2:max2,...]>
+                   <x-y[:step]>
    -j,  --json             JSON output (use -jj to enable indents)
    -l,  --level=<level>    minimum output level (info|warn|fail)
    -L,  --list-policies    list all the official, built-in policies
@@ -149,7 +151,7 @@ Below is a screen shot of the client-auditing output when an unhardened OpenSSH 
 Guides to harden server & client configuration can be found here: [https://www.ssh-audit.com/hardening_guides.html](https://www.ssh-audit.com/hardening_guides.html)
 
 ## Pre-Built Packages
-Pre-built packages are available for Windows (see the releases page), PyPI, Snap, and Docker.
+Pre-built packages are available for Windows (see the releases page), PyPI, Snap, and Docker:
 
 To install from PyPI:
 ```
@@ -167,18 +169,32 @@ $ docker pull positronsecurity/ssh-audit
 ```
 (Then run with: `docker run -it -p 2222:2222 positronsecurity/ssh-audit 10.1.1.1`)
 
+The status of various other platform packages can be found below (via Repology):
+
+<a href="https://repology.org/project/ssh-audit/versions"><img src="https://repology.org/badge/vertical-allrepos/ssh-audit.svg?columns=4" alt="Packaging status" align="center"></a>
+
 ## Web Front-End
 For convenience, a web front-end on top of the command-line tool is available at [https://www.ssh-audit.com/](https://www.ssh-audit.com/).
 
 ## ChangeLog
 
 ### v2.6.0-dev
+ - Dropped support for Python 3.6, as it reached EOL at the end of 2021.
+ - Added Ubuntu Server & Client 22.04 hardening policies.
  - Removed experimental warning tag from `sntrup761x25519-sha512@openssh.com`.
  - Updated CVE database; credit [Alexandre Zanni](https://github.com/noraj).
  - Added `-g` and `--gex-test` for granular GEX modulus size tests; credit [Adam Russell](https://github.com/thecliguy).
  - Snap packages now print more user-friendly error messages when permission errors are encountered.
  - JSON 'target' field now always includes port number; credit [tomatohater1337](https://github.com/tomatohater1337).
- - Added 24 new key exchanges: `ecdh-sha2-1.3.132.0.1`, `ecdh-sha2-1.2.840.10045.3.1.1`, `ecdh-sha2-1.3.132.0.33`, `ecdh-sha2-1.3.132.0.26`, `ecdh-sha2-1.3.132.0.27`, `ecdh-sha2-1.2.840.10045.3.1.7`, `ecdh-sha2-1.3.132.0.16`, `ecdh-sha2-1.3.132.0.34`, `ecdh-sha2-1.3.132.0.36`, `ecdh-sha2-1.3.132.0.37`, `ecdh-sha2-1.3.132.0.35`, `ecdh-sha2-1.3.132.0.38`, `ecdh-sha2-4MHB+NBt3AlaSRQ7MnB4cg==`, `ecdh-sha2-5pPrSUQtIaTjUSt5VZNBjg==`, `ecdh-sha2-VqBg4QRPjxx1EXZdV0GdWQ==`, `ecdh-sha2-zD/b3hu/71952ArpUG4OjQ==`, `ecdh-sha2-qCbG5Cn/jjsZ7nBeR7EnOA==`, `ecdh-sha2-9UzNcgwTlEnSCECZa7V1mw==`, `ecdh-sha2-wiRIU8TKjMZ418sMqlqtvQ==`, `ecdh-sha2-qcFQaMAMGhTziMT0z+Tuzw==`, `ecdh-sha2-m/FtSAmrV4j/Wy6RVUaK7A==`, `ecdh-sha2-D3FefCjYoJ/kfXgAyLddYA==`, `ecdh-sha2-h/SsxnLCtRBh7I9ATyeB3A==`, `ecdh-sha2-mNVwCXAoS1HGmHpLvBC94w==`.
+ - JSON output now includes recommendations and CVE data.
+ - Warnings are now printed for 2048-bit moduli.
+ - SHA-1 algorithms now cause failures.
+ - CBC mode ciphers are now warnings instead of failures.
+ - Generic failure/warning messages replaced with more specific reasons (i.e.: 'using weak cipher' => 'using broken RC4 cipher').
+ - Added 33 new host keys: `dsa2048-sha224@libassh.org`, `dsa2048-sha256@libassh.org`, `dsa3072-sha256@libassh.org`, `ecdsa-sha2-1.3.132.0.10-cert-v01@openssh.com`, `eddsa-e382-shake256@libassh.org`, `eddsa-e521-shake256@libassh.org`, `null`, `pgp-sign-dss`, `pgp-sign-rsa`, `spki-sign-dss`, `spki-sign-rsa`, `ssh-dss-sha224@ssh.com`, `ssh-dss-sha384@ssh.com`, `ssh-dss-sha512@ssh.com`, `ssh-ed448-cert-v01@openssh.com`, `ssh-rsa-sha224@ssh.com`, `ssh-rsa-sha2-256`, `ssh-rsa-sha2-512`, `ssh-rsa-sha384@ssh.com`, `ssh-rsa-sha512@ssh.com`, `ssh-xmss-cert-v01@openssh.com`, `ssh-xmss@openssh.com`, `webauthn-sk-ecdsa-sha2-nistp256@openssh.com`, `x509v3-ecdsa-sha2-1.3.132.0.10`, `x509v3-sign-dss-sha1`, `x509v3-sign-dss-sha224@ssh.com`, `x509v3-sign-dss-sha256@ssh.com`, `x509v3-sign-dss-sha384@ssh.com`, `x509v3-sign-dss-sha512@ssh.com`, `x509v3-sign-rsa-sha1`, `x509v3-sign-rsa-sha224@ssh.com`, `x509v3-sign-rsa-sha384@ssh.com`, `x509v3-sign-rsa-sha512@ssh.com`.
+ - Added 46 new key exchanges: `diffie-hellman-group14-sha224@ssh.com`, `diffie-hellman_group17-sha512`, `diffie-hellman-group-exchange-sha224@ssh.com`, `diffie-hellman-group-exchange-sha384@ssh.com`, `ecdh-sha2-1.2.840.10045.3.1.1`, `ecdh-sha2-1.2.840.10045.3.1.7`, `ecdh-sha2-1.3.132.0.1`, `ecdh-sha2-1.3.132.0.16`, `ecdh-sha2-1.3.132.0.26`, `ecdh-sha2-1.3.132.0.27`, `ecdh-sha2-1.3.132.0.33`, `ecdh-sha2-1.3.132.0.34`, `ecdh-sha2-1.3.132.0.35`, `ecdh-sha2-1.3.132.0.36`, `ecdh-sha2-1.3.132.0.37`, `ecdh-sha2-1.3.132.0.38`, `ecdh-sha2-4MHB+NBt3AlaSRQ7MnB4cg==`, `ecdh-sha2-5pPrSUQtIaTjUSt5VZNBjg==`, `ecdh-sha2-9UzNcgwTlEnSCECZa7V1mw==`, `ecdh-sha2-D3FefCjYoJ/kfXgAyLddYA==`, `ecdh-sha2-h/SsxnLCtRBh7I9ATyeB3A==`, `ecdh-sha2-m/FtSAmrV4j/Wy6RVUaK7A==`, `ecdh-sha2-mNVwCXAoS1HGmHpLvBC94w==`, `ecdh-sha2-qCbG5Cn/jjsZ7nBeR7EnOA==`, `ecdh-sha2-qcFQaMAMGhTziMT0z+Tuzw==`, `ecdh-sha2-VqBg4QRPjxx1EXZdV0GdWQ==`, `ecdh-sha2-wiRIU8TKjMZ418sMqlqtvQ==`, `ecdh-sha2-zD/b3hu/71952ArpUG4OjQ==`, `ecmqv-sha2`, `gss-13.3.132.0.10-sha256-*`, `gss-curve25519-sha256-*`, `gss-curve448-sha512-*`, `gss-gex-sha1-*`, `gss-gex-sha256-*`, `gss-group14-sha1-*`, `gss-group14-sha256-*`, `gss-group15-sha512-*`, `gss-group16-sha512-*`, `gss-group17-sha512-*`, `gss-group18-sha512-*`, `gss-group1-sha1-*`, `gss-nistp256-sha256-*`, `gss-nistp384-sha256-*`, `gss-nistp521-sha512-*`, `m383-sha384@libassh.org`, `m511-sha512@libassh.org`.
+ - Added 28 new ciphers: `3des-cfb`, `3des-ecb`, `3des-ofb`, `blowfish-cfb`, `blowfish-ecb`, `blowfish-ofb`, `camellia128-cbc@openssh.org`, `camellia128-ctr@openssh.org`, `camellia192-cbc@openssh.org`, `camellia192-ctr@openssh.org`, `camellia256-cbc@openssh.org`, `camellia256-ctr@openssh.org`, `cast128-cfb`, `cast128-ecb`, `cast128-ofb`, `cast128-12-cbc@ssh.com`, `idea-cfb`, `idea-ecb`, `idea-ofb`, `rijndael-cbc@ssh.com`, `seed-ctr@ssh.com`, `serpent128-gcm@libassh.org`, `serpent256-gcm@libassh.org`, `twofish128-gcm@libassh.org`, `twofish256-gcm@libassh.org`, `twofish-cfb`, `twofish-ecb`, `twofish-ofb`
+ - Added 5 new MACs: `hmac-sha1-96@openssh.com`, `hmac-sha224@ssh.com`, `hmac-sha256-2@ssh.com`, `hmac-sha384@ssh.com`, `hmac-whirlpool`.
 
 ### v2.5.0 (2021-08-26)
  - Fixed crash when running host key tests.
