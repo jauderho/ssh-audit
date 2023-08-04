@@ -379,6 +379,12 @@ def output_recommendations(out: OutputBuffer, algs: Algorithms, algorithm_recomm
             ret = False
         return ret
 
+    level_to_output = {
+        "informational": out.good,
+        "warning": out.warn,
+        "critical": out.fail
+    }
+
     with out:
         recommendations = get_algorithm_recommendations(algs, algorithm_recommendation_suppress_list, software, for_server=True)
 
@@ -391,15 +397,15 @@ def output_recommendations(out: OutputBuffer, algs: Algorithms, algorithm_recomm
 
                         p = '' if out.batch else ' ' * (padlen - len(name))
 
+                        fn = level_to_output[level]
+
                         if action == 'del':
-                            an, sg, fn = 'remove', '-', out.warn
+                            an, sg = 'remove', '-'
                             ret = False
-                            if level == 'critical':
-                                fn = out.fail
                         elif action == 'add':
-                            an, sg, fn = 'append', '+', out.good
+                            an, sg = 'append', '+'
                         elif action == 'chg':
-                            an, sg, fn = 'change', '!', out.fail
+                            an, sg = 'change', '!'
                             ret = False
 
                         if notes != '':
@@ -446,10 +452,11 @@ def post_process_findings(banner: Optional[Banner], algs: Algorithms) -> List[st
     if (algs.ssh2kex is not None and 'diffie-hellman-group-exchange-sha256' in algs.ssh2kex.kex_algorithms and 'diffie-hellman-group-exchange-sha256' in algs.ssh2kex.dh_modulus_sizes() and algs.ssh2kex.dh_modulus_sizes()['diffie-hellman-group-exchange-sha256'] == 2048) and (banner is not None and banner.software is not None and banner.software.find('OpenSSH') != -1):
 
         # Ensure a list for notes exists.
-        while len(SSH2_KexDB.ALGORITHMS['kex']['diffie-hellman-group-exchange-sha256']) < 4:
-            SSH2_KexDB.ALGORITHMS['kex']['diffie-hellman-group-exchange-sha256'].append([])
+        db = SSH2_KexDB.get_db()
+        while len(db['kex']['diffie-hellman-group-exchange-sha256']) < 4:
+            db['kex']['diffie-hellman-group-exchange-sha256'].append([])
 
-        SSH2_KexDB.ALGORITHMS['kex']['diffie-hellman-group-exchange-sha256'][3].append("A bug in OpenSSH causes it to fall back to a 2048-bit modulus regardless of server configuration (https://bugzilla.mindrot.org/show_bug.cgi?id=2793)")
+        db['kex']['diffie-hellman-group-exchange-sha256'][3].append("A bug in OpenSSH causes it to fall back to a 2048-bit modulus regardless of server configuration (https://bugzilla.mindrot.org/show_bug.cgi?id=2793)")
 
         # Ensure that this algorithm doesn't appear in the recommendations section since the user cannot control this OpenSSH bug.
         algorithm_recommendation_suppress_list.append('diffie-hellman-group-exchange-sha256')
@@ -522,7 +529,7 @@ def output(out: OutputBuffer, aconf: AuditConf, banner: Optional[Banner], header
 
     # SSHv1
     if pkm is not None:
-        adb = SSH1_KexDB.ALGORITHMS
+        adb = SSH1_KexDB.get_db()
         ciphers = pkm.supported_ciphers
         auths = pkm.supported_authentications
         title, atype = 'SSH1 host-key algorithms', 'key'
@@ -534,7 +541,7 @@ def output(out: OutputBuffer, aconf: AuditConf, banner: Optional[Banner], header
 
     # SSHv2
     if kex is not None:
-        adb = SSH2_KexDB.ALGORITHMS
+        adb = SSH2_KexDB.get_db()
         title, atype = 'key exchange algorithms', 'kex'
         program_retval = output_algorithms(out, title, adb, atype, kex.kex_algorithms, unknown_algorithms, aconf.json, program_retval, maxlen, dh_modulus_sizes=kex.dh_modulus_sizes())
         title, atype = 'host-key algorithms', 'key'
@@ -1124,7 +1131,7 @@ def algorithm_lookup(out: OutputBuffer, alg_names: str) -> int:
     }
 
     algorithm_names = alg_names.split(",")
-    adb = SSH2_KexDB.ALGORITHMS
+    adb = SSH2_KexDB.get_db()
 
     # Use nested dictionary comprehension to iterate an outer dictionary where
     # each key is an alg type that consists of a value (which is itself a
@@ -1375,6 +1382,10 @@ def main() -> int:
 
         if aconf.json:
             print(']')
+
+        # Send notification that this thread is exiting.  This deletes the thread's local copy of the algorithm databases.
+        SSH1_KexDB.thread_exit()
+        SSH2_KexDB.thread_exit()
 
     else:  # Just a scan against a single target.
         ret = audit(out, aconf)
