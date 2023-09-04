@@ -195,6 +195,7 @@ def output_algorithm(out: OutputBuffer, alg_db: Dict[str, Dict[str, List[List[Op
 
     alg_name = alg_name_with_size if alg_name_with_size is not None else alg_name
     first = True
+    use_good_for_all = False
     for level, text in texts:
         if level == 'fail':
             program_retval = exitcodes.FAILURE
@@ -203,9 +204,13 @@ def output_algorithm(out: OutputBuffer, alg_db: Dict[str, Dict[str, List[List[Op
 
         f = getattr(out, level)
         comment = (padding + ' -- [' + level + '] ' + text) if text != '' else ''
+
+        # If the first algorithm's comment is an 'info', this implies that it is rated good.  Hence, the out.good() function should be used to write all subsequent notes for this algorithm as well.
+        if (first and level == 'info') or use_good_for_all:
+            f = out.good
+            use_good_for_all = True
+
         if first:
-            if first and level == 'info':
-                f = out.good
             f(prefix + alg_name + comment)
             first = False
         else:  # pylint: disable=else-if-used
@@ -1100,7 +1105,7 @@ def audit(out: OutputBuffer, aconf: AuditConf, sshv: Optional[int] = None, print
             if aconf.gex_test != '':
                 return run_gex_granular_modulus_size_test(out, s, kex, aconf)
             else:
-                GEXTest.run(out, s, kex)
+                GEXTest.run(out, s, banner, kex)
 
         # This is a standard audit scan.
         if (aconf.policy is None) and (aconf.make_policy is False):

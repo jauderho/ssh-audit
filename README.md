@@ -183,6 +183,9 @@ For convenience, a web front-end on top of the command-line tool is available at
  - Hostname resolution failure no longer causes scans against multiple hosts to terminate unexpectedly; credit [Dani Cuesta](https://github.com/daniel-cues).
  - Algorithm recommendations resulting from warnings are now printed in yellow instead of red; credit [Adam Russell](https://github.com/thecliguy).
  - Fixed crash during GEX tests.
+ - Refined GEX testing against OpenSSH servers: when the fallback mechanism is suspected of being triggered, perform an additional test to obtain more accurate results.
+ - The color of all notes will be printed in green when the related algorithm is rated good.
+ - Added built-in policy for OpenSSH 9.4.
  - Added 1 new key exchange: `curve448-sha512@libssh.org`.
 
 ### v2.9.0 (2023-04-29)
