@@ -474,6 +474,16 @@ def post_process_findings(banner: Optional[Banner], algs: Algorithms, client_aud
 
         return ret
 
+    def _get_chacha_ciphers_not_enabled(db: Dict[str, Dict[str, List[List[Optional[str]]]]], algs: Algorithms) -> List[str]:
+        '''Returns a list of all chacha20-poly1305 in our algorithm database.'''
+        ret = []
+
+        for cipher in db["enc"]:
+            if cipher.startswith("chacha20-poly1305") and cipher not in _get_chacha_ciphers_enabled(algs):
+                ret.append(cipher)
+
+        return ret
+
     def _get_cbc_ciphers_enabled(algs: Algorithms) -> List[str]:
         '''Returns a list of CBC ciphers that the peer supports.'''
         ret = []
@@ -483,6 +493,16 @@ def post_process_findings(banner: Optional[Banner], algs: Algorithms, client_aud
             for cipher in ciphers_supported:
                 if cipher.endswith("-cbc"):
                     ret.append(cipher)
+
+        return ret
+
+    def _get_cbc_ciphers_not_enabled(db: Dict[str, Dict[str, List[List[Optional[str]]]]], algs: Algorithms) -> List[str]:
+        '''Returns a list of all CBC ciphers in our algorithm database.'''
+        ret = []
+
+        for cipher in db["enc"]:
+            if cipher.endswith("-cbc") and cipher not in _get_cbc_ciphers_enabled(algs):
+                ret.append(cipher)
 
         return ret
 
@@ -498,9 +518,24 @@ def post_process_findings(banner: Optional[Banner], algs: Algorithms, client_aud
 
         return ret
 
+    def _get_etm_macs_not_enabled(db: Dict[str, Dict[str, List[List[Optional[str]]]]], algs: Algorithms) -> List[str]:
+        '''Returns a list of ETM MACs in our algorithm database.'''
+        ret = []
+
+        for mac in db["mac"]:
+            if mac.endswith("-etm@openssh.com") and mac not in _get_etm_macs_enabled(algs):
+                ret.append(mac)
+
+        return ret
+
 
     algorithm_recommendation_suppress_list = []
     algs_to_note = []
+
+
+    #
+    # Post-processing of the OpenSSH diffie-hellman-group-exchange-sha256 fallback mechanism bug/feature.
+    #
 
     # If the server is OpenSSH, and the diffie-hellman-group-exchange-sha256 key exchange was found with modulus size 2048, add a note regarding the bug that causes the server to support 2048-bit moduli no matter the configuration.
     if (algs.ssh2kex is not None and 'diffie-hellman-group-exchange-sha256' in algs.ssh2kex.kex_algorithms and 'diffie-hellman-group-exchange-sha256' in algs.ssh2kex.dh_modulus_sizes() and algs.ssh2kex.dh_modulus_sizes()['diffie-hellman-group-exchange-sha256'] == 2048) and (banner is not None and banner.software is not None and banner.software.find('OpenSSH') != -1):
@@ -522,6 +557,11 @@ def post_process_findings(banner: Optional[Banner], algs: Algorithms, client_aud
         kex_strict_marker = True
 
     db = SSH2_KexDB.get_db()
+
+
+    #
+    # Post-processing of algorithms related to the Terrapin vulnerability (CVE-2023-48795).
+    #
 
     # Without the strict KEX marker, the chacha20-poly1305 ciphers are always vulnerable.
     for chacha_cipher in _get_chacha_ciphers_enabled(algs):
@@ -554,6 +594,11 @@ def post_process_findings(banner: Optional[Banner], algs: Algorithms, client_aud
     notes = ""
     if len(algs_to_note) > 0:
         notes = "Be aware that, while this target properly supports the strict key exchange method (via the kex-strict-?-v00@openssh.com marker) needed to protect against the Terrapin vulnerability (CVE-2023-48795), all peers must also support this feature as well, otherwise the vulnerability will still be present.  The following algorithms would allow an unpatched peer to create vulnerable SSH channels with this target: %s" % ", ".join(algs_to_note)
+
+    # Add the chacha ciphers, CBC ciphers, and ETM MACs to the recommendation suppression list if they are not enabled on the server.  That way they are not recommended to the user to enable if they were explicitly disabled to handle the Terrapin vulnerability.  However, they can still be recommended for disabling.
+    algorithm_recommendation_suppress_list += _get_chacha_ciphers_not_enabled(db, algs)
+    algorithm_recommendation_suppress_list += _get_cbc_ciphers_not_enabled(db, algs)
+    algorithm_recommendation_suppress_list += _get_etm_macs_not_enabled(db, algs)
 
     return algorithm_recommendation_suppress_list, notes
 
@@ -652,7 +697,7 @@ def output(out: OutputBuffer, aconf: AuditConf, banner: Optional[Banner], header
     if aconf.json:
         out.reset()
         # Build & write the JSON struct.
-        out.info(json.dumps(build_struct(aconf.host + ":" + str(aconf.port), banner, cves, kex=kex, client_host=client_host, software=software, algorithms=algs, algorithm_recommendation_suppress_list=algorithm_recommendation_suppress_list), indent=4 if aconf.json_print_indent else None, sort_keys=True))
+        out.info(json.dumps(build_struct(aconf.host + ":" + str(aconf.port), banner, cves, kex=kex, client_host=client_host, software=software, algorithms=algs, algorithm_recommendation_suppress_list=algorithm_recommendation_suppress_list, additional_notes=additional_notes), indent=4 if aconf.json_print_indent else None, sort_keys=True))
     elif len(unknown_algorithms) > 0:  # If we encountered any unknown algorithms, ask the user to report them.
         out.warn("\n\n!!! WARNING: unknown algorithm(s) found!: %s.  Please email the full output above to the maintainer (jtesta@positronsecurity.com), or create a Github issue at <https://github.com/jtesta/ssh-audit/issues>.\n" % ','.join(unknown_algorithms))
 
@@ -988,7 +1033,7 @@ def process_commandline(out: OutputBuffer, args: List[str], usage_cb: Callable[.
     return aconf
 
 
-def build_struct(target_host: str, banner: Optional['Banner'], cves: List[Dict[str, Union[str, float]]], kex: Optional['SSH2_Kex'] = None, pkm: Optional['SSH1_PublicKeyMessage'] = None, client_host: Optional[str] = None, software: Optional[Software] = None, algorithms: Optional[Algorithms] = None, algorithm_recommendation_suppress_list: Optional[List[str]] = None) -> Any:  # pylint: disable=too-many-arguments
+def build_struct(target_host: str, banner: Optional['Banner'], cves: List[Dict[str, Union[str, float]]], kex: Optional['SSH2_Kex'] = None, pkm: Optional['SSH1_PublicKeyMessage'] = None, client_host: Optional[str] = None, software: Optional[Software] = None, algorithms: Optional[Algorithms] = None, algorithm_recommendation_suppress_list: Optional[List[str]] = None, additional_notes: str = "") -> Any:  # pylint: disable=too-many-arguments
 
     def fetch_notes(algorithm: str, alg_type: str) -> Dict[str, List[Optional[str]]]:
         '''Returns a dictionary containing the messages in the "fail", "warn", and "info" levels for this algorithm.'''
@@ -1155,6 +1200,9 @@ def build_struct(target_host: str, banner: Optional['Banner'], cves: List[Dict[s
 
     # Add in the recommendations.
     res['recommendations'] = get_algorithm_recommendations(algorithms, algorithm_recommendation_suppress_list, software, for_server=True)
+
+    # Add in the additional notes.  Currently just one string, but in the future this may grow to multiple strings.  Hence, an array is needed to prevent future schema breakage.
+    res['additional_notes'] = [additional_notes]
 
     return res
 
