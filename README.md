@@ -57,7 +57,8 @@ usage: ssh-audit.py [options] <host>
    -L,  --list-policies    list all the official, built-in policies
         --lookup=<alg1,alg2,...>    looks up an algorithm(s) without
                                     connecting to a server
-   -m,  --manual           print the man page (Windows only)
+   -m,  --manual           print the man page (Docker, PyPI, Snap, and Windows
+                                    builds only)
    -M,  --make-policy=<policy.txt>  creates a policy based on the target server
                                     (i.e.: the target server has the ideal
                                     configuration that other servers should
@@ -181,6 +182,10 @@ For convenience, a web front-end on top of the command-line tool is available at
 ### v3.2.0-dev (???)
  - Expanded filter of CBC ciphers to flag for the Terrapin vulnerability.  It now includes more rarely found ciphers.
  - Color output is disabled if the `NO_COLOR` environment variable is set (see https://no-color.org/).
+ - Fixed parsing of ecdsa-sha2-nistp* CA signatures on host keys.  Additionally, they are now flagged as potentially back-doored, just as standard host keys are.
+ - The built-in man page (`-m`, `--manual`) is now available on Docker, PyPI, and Snap builds, in addition to the Windows build.
+ - Snap builds are now architecture-independent.
+ - Gracefully handle rare exceptions (i.e.: crashes) while performing GEX tests.
 
 ### v3.1.0 (2023-12-20)
  - Added test for the Terrapin message prefix truncation vulnerability ([CVE-2023-48795](https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2023-48795)).
