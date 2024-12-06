@@ -532,9 +532,9 @@ def output(out: OutputBuffer, aconf: AuditConf, banner: Optional[Banner], header
                 else:
                     host = '%s:%d' % (aconf.host, aconf.port)
 
-            out.good('(gen) target: {}'. format(host))
+            out.good('(gen) target: {}'. format(host), always_print=True)
         if client_audit:
-            out.good('(gen) client IP: {}'.format(client_host))
+            out.good('(gen) client IP: {}'.format(client_host), always_print=True)
         if len(header) > 0:
             out.info('(gen) header: ' + '\n'.join(header))
         if banner is not None:
@@ -842,7 +842,6 @@ def process_commandline(out: OutputBuffer, args: List[str]) -> 'AuditConf':  # p
 
         if argument.batch is True:
             aconf.batch = True
-            aconf.verbose = True
 
         # If one -j was given, turn on JSON output.  If -jj was given, enable indentation.
         aconf.json = argument.json > 0
