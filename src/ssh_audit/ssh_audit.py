@@ -53,6 +53,7 @@ from ssh_audit.gextest import GEXTest
 from ssh_audit.hostkeytest import HostKeyTest
 from ssh_audit.outputbuffer import OutputBuffer
 from ssh_audit.policy import Policy
+from ssh_audit.hardeningguides import Hardening_Guides
 from ssh_audit.product import Product
 from ssh_audit.protocol import Protocol
 from ssh_audit.software import Software
@@ -789,11 +790,14 @@ def process_commandline(out: OutputBuffer, args: List[str]) -> 'AuditConf':  # p
     # Add long options to the parser
     parser.add_argument("--conn-rate-test", action="store", dest="conn_rate_test", metavar="N[:max_rate]", type=str, default=None, help="perform a connection rate test (useful for collecting metrics related to susceptibility of the DHEat vuln). Testing is conducted with N concurrent sockets with an optional maximum rate of connections per second")
     parser.add_argument("--dheat", action="store", dest="dheat", metavar="N[:kex[:e_len]]", type=str, default=None, help="continuously perform the DHEat DoS attack (CVE-2002-20001) against the target using N concurrent sockets.  Optionally, a specific key exchange algorithm can be specified instead of allowing it to be automatically chosen.  Additionally, a small length of the fake e value sent to the server can be chosen for a more efficient attack (such as 4).")
+    parser.add_argument("--get-hardening-guide", action="store", metavar="platform", dest="get_hardening_guide", type=str, default=None, help="retrieves the hardening guide for the specified platform name (use --list-hardening-guides to see list of available guides).")
+    parser.add_argument("--list-hardening-guides", action="store_true", dest="list_hardening_guides", default=False, help="list all official, built-in hardening guides for common systems.  Their full names can then be passed to --get-hardening-guide.  Add -v to this option to view hardening guide change logs and prior versions.")
     parser.add_argument("--lookup", action="store", dest="lookup", metavar="alg1[,alg2,...]", type=str, default=None, help="looks up an algorithm(s) without connecting to a server.")
     parser.add_argument("--skip-rate-test", action="store_true", dest="skip_rate_test", default=False, help="skip the connection rate test during standard audits (used to safely infer whether the DHEat attack is viable)")
     parser.add_argument("--threads", action="store", dest="threads", metavar="N", type=int, default=32, help="number of threads to use when scanning multiple targets (-T/--targets) (default: %(default)s)")
 
-    # The mandatory target option.  Or rather, mandatory when -L, -T, or --lookup are not used.
+
+    # The mandatory target option.  Or rather, mandatory when -L, -T, --lookup or --print-config are not used.
     parser.add_argument("host", nargs="?", action="store", type=str, default="", help="target hostname or IPv4/IPv6 address")
 
     # If no arguments were given, print the help and exit.
@@ -889,8 +893,8 @@ def process_commandline(out: OutputBuffer, args: List[str]) -> 'AuditConf':  # p
         parser.print_help()
         sys.exit(exitcodes.UNKNOWN_ERROR)
 
-    if argument.host == "" and argument.client_audit is False and argument.targets is None and argument.list_policies is False and argument.lookup is None and argument.manual is False:
-        out.fail("target host must be specified, unless -c, -m, -L, -T, or --lookup are used", write_now=True)
+    if argument.host == "" and argument.client_audit is False and argument.targets is None and argument.list_policies is False and argument.lookup is None and argument.manual is False and argument.list_hardening_guides is False and argument.get_hardening_guide is None:
+        out.fail("target host must be specified, unless -c, -m, -L, -T, --lookup or --list-hardening-guides are used", write_now=True)
         sys.exit(exitcodes.UNKNOWN_ERROR)
 
     if aconf.manual:
@@ -901,6 +905,14 @@ def process_commandline(out: OutputBuffer, args: List[str]) -> 'AuditConf':  # p
 
     if aconf.list_policies:
         list_policies(out, aconf.verbose)
+        sys.exit(exitcodes.GOOD)
+
+    # Print a list of the hardening guides, or the specific guide requested by the user.
+    if argument.list_hardening_guides is True:
+        Hardening_Guides.list_guides(out, aconf.verbose)
+        sys.exit(exitcodes.GOOD)
+    elif argument.get_hardening_guide is not None:
+        Hardening_Guides.print_hardening_guide(out, argument.get_hardening_guide)
         sys.exit(exitcodes.GOOD)
 
     if aconf.client_audit is False and aconf.target_file is None:
