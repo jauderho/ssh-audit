@@ -1,4 +1,4 @@
-.TH SSH-AUDIT 1 "August 17, 2025"
+.TH SSH-AUDIT 1 "June 20, 2026"
 .SH NAME
 \fBssh-audit\fP \- SSH server & client configuration auditor
 .SH SYNOPSIS
@@ -142,6 +142,11 @@ Runs a policy audit against a target using the specified policy (see \fBPOLICY A
 Skips the connection rate test during standard audits.  By default, a few dozen TCP connections are created with the target host to see if connection throttling is implemented (this can safely infer whether the target is vulnerable to the DHEat attack; see CVE-2002-20001).
 
 .TP
+.B     \-\-socks5 host:port
+.br
+Connects through a SOCKS5 proxy. Rate tests are automatically skipped (i.e.: implies \-\-skip\-rate\-test).
+
+.TP
 .B -t, \-\-timeout=<secs>
 .br
 The timeout, in seconds, for creating connections and reading data from the socket.  Default is 5.
@@ -149,7 +154,7 @@ The timeout, in seconds, for creating connections and reading data from the sock
 .TP
 .B -T, \-\-targets=<hosts.txt>
 .br
-A file containing a list of target hosts.  Each line must have one host, in the format of HOST[:PORT].  Use -p/--port to set the default port for all hosts.  Use --threads to control concurrent scans.
+A file containing a list of target hosts.  Each line must have one host, in the format of HOST[:PORT] (or for UNIX sockets, use "unix://path/to/socket").  Use -p/--port to set the default port for all hosts.  Use --threads to control concurrent scans.
 
 .TP
 .B     \-\-threads=<threads>
@@ -188,6 +193,7 @@ ssh-audit 127.0.0.1
 ssh-audit 127.0.0.1:222
 ssh-audit ::1
 ssh-audit [::1]:222
+ssh-audit unix:///run/ssh-unix-local/socket
 .fi
 .RE
 

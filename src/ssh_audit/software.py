@@ -72,10 +72,29 @@ class Software:
             oversion, opatch = mx.group(1), mx.group(2).strip()
         else:
             oversion, opatch = other, ''
-        if self.version < oversion:
-            return -1
-        elif self.version > oversion:
-            return 1
+
+        # Attempt to parse the versions into floats.
+        float_parse_error = False
+        selfversion_float = 0.0
+        oversion_float = 0.0
+        try:
+            selfversion_float = float(self.version)
+            oversion_float = float(oversion)
+        except ValueError:
+            float_parse_error = True
+
+        # If the versions could not be parsed into floats, use the old string compare method. This returns incorrect results when comparing modern OpenSSH versions ("9.6" > "10.4" evaluates to True!), but removing this may trigger other bugs, and we have no other good options here, soooo...
+        if float_parse_error:
+            if self.version < oversion:
+                return -1
+            elif self.version > oversion:
+                return 1
+        else:  # Float parsing worked, so we'll use this instead. That way (9.6 > 10.4) properly evaluates to False.
+            if selfversion_float < oversion_float:  # pylint: disable=else-if-used
+                return -1
+            elif selfversion_float > oversion_float:
+                return 1
+
         spatch = self.patch or ''
         if self.product == Product.DropbearSSH:
             if not re.match(r'^test\d.*$', opatch):

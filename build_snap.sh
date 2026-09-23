@@ -3,7 +3,7 @@
 #
 #   The MIT License (MIT)
 #
-#   Copyright (C) 2021-2024 Joe Testa (jtesta@positronsecurity.com)
+#   Copyright (C) 2021-2026 Joe Testa (jtesta@positronsecurity.com)
 #
 #   Permission is hereby granted, free of charge, to any person obtaining a copy
 #   of this software and associated documentation files (the "Software"), to deal
@@ -32,19 +32,23 @@
 
 
 # Pre-requisites
+echo "Installing pre-requisites..."
 sudo apt install -y make
 sudo snap install snapcraft --classic
 sudo snap install review-tools lxd
 
 # Initialize LXD.
+echo -e "\nInitializing LXD..."
 sudo lxd init --auto
 
-# Reset the filesystem from any previous runs.
-rm -rf parts/ prime/ snap/ stage/ build/ dist/ src/*.egg-info/ ssh-audit*.snap
+# Reset local files that may have been changed through a previous run.
+echo "Resetting local files..."
+rm -f ssh-audit*.snap
 git checkout snapcraft.yaml 2> /dev/null
 git checkout src/ssh_audit/globals.py 2> /dev/null
 
 # Add the built-in manual page.
+echo "Processing man page..."
 ./add_builtin_man_page.sh
 
 # Get the version from the globals.py file.
@@ -67,10 +71,41 @@ if [[ ! $snap_version =~ ^[0-9]\.[0-9]\.[0-9]\-[0-9]$ ]]; then
    exit 1
 fi
 
-# Append the version field to the end of the file.  Not pretty, but it works.
-echo -e "\nversion: '${snap_version}'" >> snapcraft.yaml
+# Set the version field.
+sed -i "s/version: \"\"/version: \"${snap_version}\"/" snapcraft.yaml
+
+# Ensure we set the version field correctly.
+grep "version: \"${snap_version}\"" snapcraft.yaml > /dev/null 2> /dev/null
+if [[ $? != 0 ]]; then
+    echo "Failed to set version field in snapcraft.yaml."
+    exit 1
+fi
 
 # Set the SNAP_PACKAGE variable to True so that file permission errors give more user-friendly 
 sed -i 's/SNAP_PACKAGE = False/SNAP_PACKAGE = True/' src/ssh_audit/globals.py
 
-snapcraft --use-lxd && echo -e "\nDone.\n"
+# Clean any previous builds.
+echo "Running 'snapcraft clean'..."
+snapcraft clean
+
+# Build the snap file.
+echo "Running 'snapcraft pack --use-lxd'..."
+snapcraft pack --use-lxd
+if [[ $? != 0 ]]; then
+    echo -e "\nPack process failed: $?"
+    exit 1
+else
+    echo -e "Pack process succeeded."
+fi
+
+# Run the linter on it.
+echo "Running 'snapcraft lint' on *.snap..."
+snapcraft lint --quiet *.snap
+if [[ $? != 0 ]]; then
+    echo -e "\nLint process failed: $?"
+    exit 1
+else
+    echo -e "Lint process succeeded."
+fi
+
+echo -e "\nDone!\n"

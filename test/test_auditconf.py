@@ -165,3 +165,19 @@ class TestAuditConf:
         self._test_conf(conf, host='localhost', level='fail')
         with pytest.raises(SystemExit):
             conf = c('-l something localhost')
+
+    def test_audit_conf_process_commandline_socks5_proxy(self):
+        c = lambda x: self.process_commandline(self.OutputBuffer, x.split())  # noqa
+
+        assert c('--socks5 127.0.0.1:1080 localhost').socks5_proxy == '127.0.0.1:1080'
+        assert c('--socks5 [fe80::aaaa:bbbb:cccc:dddd]:1080 localhost').socks5_proxy == '[fe80::aaaa:bbbb:cccc:dddd]:1080'
+        assert c('--socks5 somehost.lol:1080 localhost').socks5_proxy == 'somehost.lol:1080'
+
+        with pytest.raises(SystemExit):
+            c('--socks5 localhost localhost')
+
+        with pytest.raises(SystemExit):
+            c('--socks5 localhost:0 localhost')
+
+        with pytest.raises(SystemExit):
+            c('--socks5 localhost:65536 localhost')

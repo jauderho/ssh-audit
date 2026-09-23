@@ -1,7 +1,7 @@
 """
    The MIT License (MIT)
 
-   Copyright (C) 2017-2025 Joe Testa (jtesta@positronsecurity.com)
+   Copyright (C) 2017-2026 Joe Testa (jtesta@positronsecurity.com)
    Copyright (C) 2017 Andris Raugulis (moo@arthepsy.eu)
 
    Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -51,7 +51,7 @@ class SSH_Socket(ReadBuf, WriteBuf):
 
     SM_BANNER_SENT = 1
 
-    def __init__(self, outputbuffer: 'OutputBuffer', host: Optional[str], port: int, ip_version_preference: List[int] = [], timeout: Union[int, float] = 5, timeout_set: bool = False) -> None:  # pylint: disable=dangerous-default-value
+    def __init__(self, outputbuffer: 'OutputBuffer', host: Optional[str], port: int, ip_version_preference: List[int] = [], timeout: Union[int, float] = 5, timeout_set: bool = False, socks5_proxy: Optional[str] = None) -> None:  # pylint: disable=dangerous-default-value
         super(SSH_Socket, self).__init__()
         self.__outputbuffer = outputbuffer
         self.__sock: Optional[socket.socket] = None
@@ -72,6 +72,8 @@ class SSH_Socket(ReadBuf, WriteBuf):
         self.__timeout_set = timeout_set
         self.client_host: Optional[str] = None
         self.client_port = None
+        self.__socks5_proxy = socks5_proxy  # SOCKS5 proxy in "host:port" format, or None
+
 
     def _resolve(self) -> Iterable[Tuple[int, Tuple[Any, ...]]]:
         """Resolves a hostname into a list of IPs
@@ -95,11 +97,13 @@ class SSH_Socket(ReadBuf, WriteBuf):
             if socktype == socket.SOCK_STREAM:
                 yield af, addr
 
-    # Listens on a server socket and accepts one connection (used for
-    # auditing client connections).
+
     def listen_and_accept(self) -> None:
+        '''Listens on a server socket and accepts one connection (used for auditing client connections).'''
 
         try:
+            self.__outputbuffer.d(f"Listening on 0.0.0.0:{self.__port}...", write_now=True)
+
             # Socket to listen on all IPv4 addresses.
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -110,6 +114,8 @@ class SSH_Socket(ReadBuf, WriteBuf):
             print("Warning: failed to listen on any IPv4 interfaces: %s" % str(e), file=sys.stderr)
 
         try:
+            self.__outputbuffer.d(f"Listening on [::]:{self.__port}...", write_now=True)
+
             # Socket to listen on all IPv6 addresses.
             s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -150,11 +156,27 @@ class SSH_Socket(ReadBuf, WriteBuf):
         c.settimeout(self.__timeout)
         self.__sock = c
 
+
     def connect(self) -> Optional[str]:
         '''Returns None on success, or an error string.'''
         err = None
         s = None
+
         try:
+            # If we're connecting to a UNIX socket.
+            if self.__host.startswith("unix://"):
+                s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                s.settimeout(self.__timeout)
+                s.connect(self.__host[7:])
+                self.__sock = s
+                return None
+
+            # If we're connecting through a SOCKS5 proxy.
+            if self.__socks5_proxy is not None:
+                self.__sock = self._connect_via_socks5()
+                return None
+
+            # We're connecting to an Internet host.
             for af, addr in self._resolve():
                 s = socket.socket(af, socket.SOCK_STREAM)
                 s.settimeout(self.__timeout)
@@ -162,15 +184,111 @@ class SSH_Socket(ReadBuf, WriteBuf):
                 s.connect(addr)
                 self.__sock = s
                 return None
+
         except socket.error as e:
             err = e
             self._close_socket(s)
+
         if err is None:
             errm = 'host {} has no DNS records'.format(self.__host)
         else:
             errt = (self.__host, self.__port, err)
             errm = 'cannot connect to {} port {}: {}'.format(*errt)
+
         return '[exception] {}'.format(errm)
+
+
+    def _connect_via_socks5(self) -> socket.socket:
+        '''Connect to the target host:port via a SOCKS5 proxy. Returns a socket on success, or raises an exception.'''
+
+        def __socks5_recv_exact(s: socket.socket, n: int) -> Optional[bytes]:
+            '''Read exactly n bytes from socket s, returning None on EOF.'''
+            buf = b''
+            while len(buf) < n:
+                chunk = s.recv(n - len(buf))
+                if not chunk:
+                    return None
+                buf += chunk
+            return buf
+
+        # Parse the "host:port" string into its parts.
+        proxy_host, proxy_port = Utils.parse_host_and_port(self.__socks5_proxy) if self.__socks5_proxy is not None else ("", 0)
+
+        self.__outputbuffer.d("Connecting to SOCKS5 proxy %s:%d..." % (proxy_host, proxy_port), write_now=True)
+        s = socket.create_connection((proxy_host, proxy_port), timeout=self.__timeout)
+
+        # SOCKS5 greeting: version=5, nmethods=1, method=0 (no auth)
+        s.sendall(b'\x05\x01\x00')
+        resp = __socks5_recv_exact(s, 2)
+        if resp is None:
+            raise socket.error("no response from SOCKS5 proxy during handshake")
+        if resp[0] != 5:
+            raise socket.error("SOCKS5 proxy returned unexpected version: {}".format(resp[0]))
+        if resp[1] == 0xff:
+            raise socket.error("SOCKS5 proxy rejected all authentication methods")
+        if resp[1] != 0:
+            raise socket.error("SOCKS5 proxy requires authentication (method {:d}), but only no-auth is supported".format(resp[1]))
+
+        # Set the type and host encoding appropriately, depending on if we're sending a hostname, IPv4, or IPv6 address. The ATYP field is 3 when the client is sending a hostname.
+        atyp = 3
+        _enc_host = self.__host.encode('idna')
+        dst_addr = struct.pack('!B', len(_enc_host)) + _enc_host
+        if Utils.is_ipv4_address(self.__host):
+            atyp = 1
+            dst_addr = socket.inet_pton(socket.AF_INET, self.__host)
+        elif Utils.is_ipv6_address(self.__host):
+            atyp = 4
+            dst_addr = socket.inet_pton(socket.AF_INET6, self.__host)
+
+        # SOCKS5 connect request: version=5, cmd=1 (connect), rsv=0, atyp
+        request = struct.pack('!BBBB', 5, 1, 0, atyp) + dst_addr + struct.pack('!H', self.__port)
+        self.__outputbuffer.d("Requesting SOCKS5 proxy to connect to %s:%d..." % (self.__host, self.__port), write_now=True)
+        s.sendall(request)
+
+        # Read the fixed part of the response (4 bytes: ver, rep, rsv, atyp)
+        hdr = __socks5_recv_exact(s, 4)
+        if hdr is None:
+            raise socket.error("no response from SOCKS5 proxy during connect")
+
+        server_version = hdr[0]
+        reply = hdr[1]
+        # rsv = hdr[2]  # Reserved, set to 0 as per RFC1928.
+        atyp = hdr[3]
+
+        if server_version != 5:
+            raise socket.error("SOCKS5 proxy returned unexpected version in connect response: {}".format(hdr[0]))
+
+        if reply != 0:
+            socks5_errors = {
+                1: "general SOCKS server failure",
+                2: "connection not allowed by ruleset",
+                3: "network unreachable",
+                4: "host unreachable",
+                5: "connection refused",
+                6: "TTL expired",
+                7: "command not supported",
+                8: "address type not supported",
+            }
+
+            err = socks5_errors[reply] if reply in socks5_errors else f"unknown error: {reply}"
+            raise socket.error("SOCKS5 proxy connect failed: {}".format(err))
+
+        # Read and discard the bound address from the response
+        if atyp == 1:    # IPv4
+            __socks5_recv_exact(s, 4 + 2)
+        elif atyp == 4:  # IPv6
+            __socks5_recv_exact(s, 16 + 2)
+        elif atyp == 3:  # domain name
+            alen_data = __socks5_recv_exact(s, 1)
+            if alen_data is None:
+                raise socket.error("truncated SOCKS5 response")
+            __socks5_recv_exact(s, alen_data[0] + 2)
+        else:
+            raise socket.error("SOCKS5 proxy returned unknown address type: {}".format(atyp))
+
+        self.__outputbuffer.d("Successfully established SOCKS5 connection.", write_now=True)
+        return s
+
 
     def get_banner(self) -> Tuple[Optional['Banner'], List[str], Optional[str]]:
         self.__outputbuffer.d('Getting banner...', write_now=True)
@@ -201,6 +319,7 @@ class SSH_Socket(ReadBuf, WriteBuf):
 
         return self.__banner, self.__header, e
 
+
     def recv(self, size: int = 2048) -> Tuple[int, Optional[str]]:
         if self.__sock is None:
             return -1, 'not connected'
@@ -220,6 +339,7 @@ class SSH_Socket(ReadBuf, WriteBuf):
         self._len += len(data)
         self._buf.seek(pos, 0)
         return len(data), None
+
 
     def send(self, data: bytes) -> Tuple[int, Optional[str]]:
         if self.__sock is None:
@@ -243,15 +363,18 @@ class SSH_Socket(ReadBuf, WriteBuf):
         kex.write(self)
         self.send_packet()
 
+
     def send_banner(self, banner: str) -> None:
         self.send(banner.encode() + b'\r\n')
         self.__state = max(self.__state, self.SM_BANNER_SENT)
+
 
     def ensure_read(self, size: int) -> None:
         while self.unread_len < size:
             s, e = self.recv()
             if s < 0:
                 raise SSH_Socket.InsufficientReadException(e)
+
 
     def read_packet(self) -> Tuple[int, bytes]:
         try:
@@ -284,6 +407,7 @@ class SSH_Socket(ReadBuf, WriteBuf):
                 e = ex.args[0].encode('utf-8')
             return -1, e
 
+
     def send_packet(self) -> Tuple[int, Optional[str]]:
         payload = self.write_flush()
         padding = -(len(payload) + 5) % 8
@@ -294,9 +418,11 @@ class SSH_Socket(ReadBuf, WriteBuf):
         data = struct.pack('>Ib', plen, padding) + payload + pad_bytes
         return self.send(data)
 
+
     def is_connected(self) -> bool:
         """Returns true if this Socket is connected, False otherwise."""
         return self.__sock is not None
+
 
     def close(self) -> None:
         self.__cleanup()
@@ -304,6 +430,7 @@ class SSH_Socket(ReadBuf, WriteBuf):
         self.__state = 0
         self.__header = []
         self.__banner = None
+
 
     def _close_socket(self, s: Optional[socket.socket]) -> None:
         try:
@@ -313,8 +440,10 @@ class SSH_Socket(ReadBuf, WriteBuf):
         except Exception:
             pass
 
+
     def __del__(self) -> None:
         self.__cleanup()
+
 
     def __cleanup(self) -> None:
         self._close_socket(self.__sock)

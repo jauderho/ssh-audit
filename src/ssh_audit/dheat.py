@@ -1,7 +1,7 @@
 """
    The MIT License (MIT)
 
-   Copyright (C) 2023-2024 Joe Testa (jtesta@positronsecurity.com)
+   Copyright (C) 2023-2026 Joe Testa (jtesta@positronsecurity.com)
 
    Permission is hereby granted, free of charge, to any person obtaining a copy
    of this software and associated documentation files (the "Software"), to deal
@@ -194,7 +194,9 @@ class DHEat:
         self.num_connect_timeouts = 0
         self.num_read_timeouts = 0
         self.num_socket_exceptions = 0
-        self.num_openssh_throttled_connections = 0
+        self.num_em = 0     # Number of "Exceeded MaxStartups" messages.
+        self.num_naatt = 0  # Number of "No allowed at this time" messages.
+        self.num_invalid_banners = 0
 
         # The time we started the attack.
         self.start_timer = 0.0
@@ -322,7 +324,11 @@ class DHEat:
             except OSError:
                 pass
 
-            del socket_dict[s]
+            if s in socket_dict:
+                del socket_dict[s]
+
+        # Check if this platform has socket.AF_UNIX. Windows does not.
+        has_af_unix = hasattr(socket, 'AF_UNIX')
 
         # Resolve the target into an IP address
         out.d("Resolving target %s..." % aconf.host)
@@ -351,10 +357,10 @@ class DHEat:
 
             rate_str = ""
             if aconf.conn_rate_test_target_rate > 0:
-                rate_str = " at a max rate of %s%u%s connections per second" % (DHEat.WHITEB, aconf.conn_rate_test_target_rate, DHEat.CLEAR)
+                rate_str = f" at a max rate of {DHEat.WHITEB}{aconf.conn_rate_test_target_rate:d}{DHEat.CLEAR} connections per second"
 
             print()
-            print("Performing non-disruptive rate test against %s[%s]:%u%s with %s%u%s concurrent sockets%s.  No Diffie-Hellman requests will be sent." % (DHEat.WHITEB, target_ip_address, aconf.port, DHEat.CLEAR, DHEat.WHITEB, concurrent_sockets, DHEat.CLEAR, rate_str))
+            print(f"Performing non-disruptive rate test against {DHEat.WHITEB}[{target_ip_address}]:{aconf.port:d}{DHEat.CLEAR} with {DHEat.WHITEB}{concurrent_sockets:d}{DHEat.CLEAR} concurrent sockets{rate_str}.  No Diffie-Hellman requests will be sent.\n")
             print()
 
             # Make room for the multi-line output.
@@ -369,14 +375,17 @@ class DHEat:
                     server_dh_kex.append(server_kex)
 
             if len(server_dh_kex) == 0:
-                out.d("Skipping DHEat.dh_rate_test() since server does not support any DH algorithms: [%s]" % ", ".join(kex.kex_algorithms))
+                kex_list = ", ".join(kex.kex_algorithms)
+                out.d(f"Skipping DHEat.dh_rate_test() since server does not support any DH algorithms: [{kex_list}]")
                 return ""
             else:
-                out.d("DHEat.dh_rate_test(): starting test; parameters: %f seconds, %u max connections, %u concurrent sockets." % (max_time, max_connections, concurrent_sockets), write_now=True)
+                out.d(f"DHEat.dh_rate_test(): starting test; parameters: {max_time:,.1f} seconds, {max_connections:,d} max connections, {concurrent_sockets:,d} concurrent sockets.", write_now=True)
 
         num_attempted_connections = 0
         num_opened_connections = 0
-        num_exceeded_maxstartups = 0
+        num_em = 0     # Number of "Exceeded MaxStartups" messages.
+        num_naatt = 0  # Number of "Not available at this time" messages.
+        num_invalid_banners = 0
         socket_dict: Dict[socket.socket, float] = {}
         start_timer = time.time()
         now = start_timer
@@ -395,13 +404,15 @@ class DHEat:
                 if (now - last_update) >= 1.0:
                     seconds_running = now - start_timer
                     if multiline_output:
-                        print("\033[5ARun time: %s%.1f%s seconds" % (DHEat.WHITEB, seconds_running, DHEat.CLEAR))
-                        print("TCP SYNs: %s%u%s (total); %s%.1f%s (per second)" % (DHEat.WHITEB, num_attempted_connections, DHEat.CLEAR, DHEat.BLUEB, num_attempted_connections / seconds_running, DHEat.CLEAR))
-                        print("Completed connections: %s%u%s (total); %s%.1f%s (per second)" % (DHEat.WHITEB, num_opened_connections, DHEat.CLEAR, DHEat.BLUEB, num_opened_connections / seconds_running, DHEat.CLEAR))
-                        print("\"Exceeded MaxStartups\" responses: %s%u%s (total); %s%.1f%s (per second)" % (DHEat.WHITEB, num_exceeded_maxstartups, DHEat.CLEAR, DHEat.BLUEB, num_exceeded_maxstartups / seconds_running, DHEat.CLEAR))
-                        print("%s%s%s" % (DHEat.WHITEB, spinner[spinner_index], DHEat.CLEAR))
+                        print(f"\033[7A                            Run time: {DHEat.WHITEB}{seconds_running:,.1f}{DHEat.CLEAR} seconds")
+                        print(f"                            TCP SYNs: {DHEat.WHITEB}{num_attempted_connections / seconds_running:,.1f}/sec{DHEat.CLEAR}; {DHEat.WHITEB}{num_attempted_connections:,d}{DHEat.CLEAR} total ")
+                        print(f"               Completed connections: {DHEat.WHITEB}{num_opened_connections / seconds_running:,.1f}/sec{DHEat.CLEAR}; {DHEat.WHITEB}{num_opened_connections:,d}{DHEat.CLEAR} total ")
+                        print(f"    \"Exceeded MaxStartups\" responses: {DHEat.WHITEB}{num_em / seconds_running:,.1f}/sec{DHEat.CLEAR}; {DHEat.WHITEB}{num_em:,d}{DHEat.CLEAR} total ")
+                        print(f"\"Not allowed at this time\" responses: {DHEat.WHITEB}{num_naatt / seconds_running:,.1f}/sec{DHEat.CLEAR}; {DHEat.WHITEB}{num_naatt:,d}{DHEat.CLEAR} total ")
+                        print(f"                     Invalid banners: {DHEat.WHITEB}{num_invalid_banners / seconds_running:,.1f}/sec{DHEat.CLEAR}; {DHEat.WHITEB}{num_invalid_banners:,d}{DHEat.CLEAR} total ")
+                        print(DHEat.WHITEB + spinner[spinner_index] + DHEat.CLEAR)
                     else:
-                        print("%s%s%s Run time: %s%.1f%s; TCP SYNs: %s%u%s; Compl. conns: %s%u%s; TCP SYNs/sec: %s%.1f%s; Compl. conns/sec: %s%.1f%s    \r" % (DHEat.WHITEB, spinner[spinner_index], DHEat.CLEAR, DHEat.WHITEB, seconds_running, DHEat.CLEAR, DHEat.WHITEB, num_attempted_connections, DHEat.CLEAR, DHEat.WHITEB, num_opened_connections, DHEat.CLEAR, DHEat.BLUEB, num_attempted_connections / seconds_running, DHEat.CLEAR, DHEat.BLUEB, num_opened_connections / seconds_running, DHEat.CLEAR), end="")
+                        print(f"{DHEat.WHITEB}{spinner[spinner_index]}{DHEat.CLEAR} Run time: {DHEat.WHITEB}{seconds_running:,.1f}{DHEat.CLEAR}; TCP SYNs: {DHEat.WHITEB}{num_attempted_connections:,d}{DHEat.CLEAR}; Compl. conns: {DHEat.WHITEB}{num_opened_connections:,d}{DHEat.CLEAR}; TCP SYNs/sec: {DHEat.BLUEB}{num_attempted_connections / seconds_running:,.1f}{DHEat.CLEAR}; Compl. conns/sec: {DHEat.BLUEB}{num_opened_connections / seconds_running:,.1f}{DHEat.CLEAR}    \r", end="")
                     last_update = now
                     spinner_index = (spinner_index + 1) % 4
 
@@ -435,7 +446,11 @@ class DHEat:
                 s.setblocking(False)
 
                 # out.d("Creating socket (%u of %u already exist)..." % (len(socket_dict), concurrent_sockets), write_now=True)
-                ret = s.connect_ex((target_ip_address, aconf.port))
+                if has_af_unix and (target_address_family == socket.AF_UNIX):
+                    ret = s.connect_ex(target_ip_address)
+                else:
+                    ret = s.connect_ex((target_ip_address, aconf.port))
+
                 num_attempted_connections += 1
                 if ret in [0, errno.EINPROGRESS, errno.EWOULDBLOCK]:
                     socket_dict[s] = now
@@ -463,8 +478,14 @@ class DHEat:
                     num_opened_connections += 1
                     # out.d("Number of opened connections: %u (max: %u)." % (num_opened_connections, max_connections))
                 elif buf == b"Exceeded":
-                    num_exceeded_maxstartups += 1
+                    num_em += 1
                     # out.d("Number of \"Exceeded MaxStartups\": %u" % num_exceeded_maxstartups)
+                elif buf == b"Not allo":
+                    num_naatt += 1
+                    # out.d("Number of \"Not allowed at this time\": {num_naatt:,d}")
+                else:
+                    num_invalid_banners += 1
+                    # out.d("Number of invalid banners: {num_invalid_banners:,d}")
 
                 _close_socket(socket_dict, s)
 
@@ -716,41 +737,49 @@ class DHEat:
         # Print extensive statistics on what just happened.
         seconds_running = time.time() - self.start_timer
         print("\n\n")
-        print("                        %s %sSTATISTICS%s %s" % (self.BAR_CHART, self.WHITEB, self.CLEAR, self.CHART_UPWARDS))
-        print("                           %s----------%s" % (self.WHITEB, self.CLEAR))
+        print(f"                            {self.BAR_CHART} {self.WHITEB}STATISTICS{self.CLEAR} {self.CHART_UPWARDS}")
+        print(f"                               {self.WHITEB}----------{self.CLEAR}")
         print()
-        print("                       Run time: %s%.1f seconds%s" % (self.WHITEB, seconds_running, self.CLEAR))
+        print(f"                           Run time: {self.WHITEB}{seconds_running:,.1f} seconds{self.CLEAR}")
         print()
-        print("      Attempted TCP connections: %s%.1f/sec, %u total%s" % (self.WHITEB, self.num_attempted_tcp_connections / seconds_running, self.num_attempted_tcp_connections, self.CLEAR))
-        print("     Successful TCP connections: %s%.1f/sec, %u total%s" % (self.WHITEB, self.num_successful_tcp_connections / seconds_running, self.num_successful_tcp_connections, self.CLEAR))
+        print(f"          Attempted TCP connections: {self.WHITEB}{self.num_attempted_tcp_connections / seconds_running:,.1f}/sec, {self.num_attempted_tcp_connections:,d} total{self.CLEAR}")
+        print(f"         Successful TCP connections: {self.WHITEB}{self.num_successful_tcp_connections / seconds_running:,.1f}/sec, {self.num_successful_tcp_connections:,d} total{self.CLEAR}")
         print()
-        print("                  Bytes written: %s%s/sec, %s total%s" % (self.WHITEB, DHEat.add_byte_units(self.num_bytes_written / seconds_running), DHEat.add_byte_units(self.num_bytes_written), self.CLEAR))
+        print(f"                      Bytes written: {self.WHITEB}{DHEat.add_byte_units(self.num_bytes_written / seconds_running)}/sec, {DHEat.add_byte_units(self.num_bytes_written)} total{self.CLEAR}")
         print()
-        print("      Successful DH KEX replies: %s%.1f/sec, %u total%s" % (self.WHITEB, self.num_successful_dh_kex / seconds_running, self.num_successful_dh_kex, self.CLEAR))
-        print("      Unexpected DH KEX replies: %s%.1f/sec, %u total%s" % (self.WHITEB, self.num_failed_dh_kex / seconds_running, self.num_failed_dh_kex, self.CLEAR))
-        print("\"Exceeded MaxStartups\" replies*: %s%.1f/sec, %u total%s" % (self.WHITEB, self.num_openssh_throttled_connections / seconds_running, self.num_openssh_throttled_connections, self.CLEAR))
+        print(f"          Successful DH KEX replies: {self.WHITEB}{self.num_successful_dh_kex / seconds_running:,.1f}/sec, {self.num_successful_dh_kex:,d} total{self.CLEAR}")
+        print(f"          Unexpected DH KEX replies: {self.WHITEB}{self.num_failed_dh_kex / seconds_running:,.1f}/sec, {self.num_failed_dh_kex:,d} total{self.CLEAR}")
+        print(f"    \"Exceeded MaxStartups\" replies*: {self.WHITEB}{self.num_em / seconds_running:,.1f}/sec, {self.num_em:,d} total{self.CLEAR}")
+        print(f"\"Not allowed at this time\" replies+: {self.WHITEB}{self.num_naatt / seconds_running:,.1f}/sec, {self.num_naatt:,d} total{self.CLEAR}")
+        print(f"                    Invalid banners: {self.WHITEB}{self.num_invalid_banners / seconds_running:,.1f}/sec, {self.num_invalid_banners:,.1f} total{self.CLEAR}")
         print()
-        print("            Connection timeouts: %s%.1f/sec, %u total%s (timeout setting: %.1f sec)" % (self.WHITEB, self.num_connect_timeouts / seconds_running, self.num_connect_timeouts, self.CLEAR, self.connect_timeout))
-        print("                  Read timeouts: %s%.1f/sec, %u total%s (timeout setting: %.1f sec)" % (self.WHITEB, self.num_read_timeouts / seconds_running, self.num_read_timeouts, self.CLEAR, self.read_timeout))
-        print("              Socket exceptions: %s%.1f/sec, %u total%s" % (self.WHITEB, self.num_socket_exceptions / seconds_running, self.num_socket_exceptions, self.CLEAR))
+        print(f"                Connection timeouts: {self.WHITEB}{self.num_connect_timeouts / seconds_running:,.1f}/sec, {self.num_connect_timeouts:,d} total{self.CLEAR} (timeout setting: {self.connect_timeout:,.1f} sec)")
+        print(f"                      Read timeouts: {self.WHITEB}{self.num_read_timeouts / seconds_running:,.1f}/sec, {self.num_read_timeouts:,d} total{self.CLEAR} (timeout setting: {self.read_timeout:,.1f} sec)")
+        print(f"                  Socket exceptions: {self.WHITEB}{self.num_socket_exceptions / seconds_running:,.1f}/sec, {self.num_socket_exceptions:,d} total{self.CLEAR}")
         print()
 
         if seconds_running < 5.0:
-            print("%sTotal run time was under 5 seconds; try running it for longer to get more accurate analysis.%s" % (DHEat.YELLOWB, DHEat.CLEAR))
+            print(f"{DHEat.YELLOWB}Total run time was under 5 seconds; try running it for longer to get more accurate analysis.{DHEat.CLEAR}")
         elif self.num_successful_tcp_connections / seconds_running < DHEat.MAX_SAFE_RATE:
-            print("Because the number of successful TCP connections per second (%.1f) is less than %.1f, it appears that the target %sis using rate limiting%s to prevent CPU exaustion." % (self.num_successful_tcp_connections / seconds_running, DHEat.MAX_SAFE_RATE, DHEat.GREENB, DHEat.CLEAR))
+            print(f"Because the number of successful TCP connections per second ({self.num_successful_tcp_connections / seconds_running:,.1f}) is less than {DHEat.MAX_SAFE_RATE:,.1f}, it appears that the target {DHEat.GREENB}is using rate limiting{DHEat.CLEAR} to prevent CPU exaustion.")
         else:
-            print("Because the number of successful TCP connections per second (%.1f) is greater than %.1f, it appears that the target %sis NOT using rate limiting%s to prevent CPU exaustion." % (self.num_successful_tcp_connections / seconds_running, DHEat.MAX_SAFE_RATE, DHEat.REDB, DHEat.CLEAR))
+            print(f"Because the number of successful TCP connections per second ({self.num_successful_tcp_connections / seconds_running:,.1f}) is greater than {DHEat.MAX_SAFE_RATE:,.1f}, it appears that the target {DHEat.REDB}is NOT using rate limiting{DHEat.CLEAR} to prevent CPU exaustion.")
 
         print()
         print()
-        print(" * OpenSSH has a throttling mechanism (controlled by the MaxStartups directive) to prevent too many pre-authentication connections from overwhelming the server.  When triggered, the server will probabilistically return \"Exceeded MaxStartups\" instead of the usual SSH banner, then terminate the connection.  In order to maximize the DoS effectiveness, this metric should be greater than zero, though the ideal rate of rejections depends on the target server's CPU resources.")
+        print(" [*] Prior to OpenSSH 9.8, the sole connection throttling mechanism is controlled by the MaxStartups directive. This prevents too many pre-authentication connections from overwhelming the server.  When triggered, the server will probabilistically return \"Exceeded MaxStartups\" instead of the usual SSH banner, then terminate the connection.  In order to maximize the DoS effectiveness, this metric should be greater than zero, though the ideal rate of rejections depends on the target server's CPU resources.")
+        print()
+        print(" [+] Starting in OpenSSH 9.8, a more fine-gained connection throttling mechanism was added via the PerSourcePenalties directive. When triggered, the server returns \"Not allowed at this time\" instead of the usual SSH banner. This countermeasure is more effective than simply relying on the MaxStartups directive, and seems to block this attack under its default settings.")
         print()
 
 
     @staticmethod
     def _resolve_hostname(host: str, ip_version_preference: List[int]) -> Tuple[int, str]:
         '''Resolves a hostname to its IPv4 or IPv6 address, depending on user preference.'''
+
+        # First check if this is a UNIX socket.
+        if host.startswith("unix://"):
+            return int(socket.AF_UNIX), host[7:]
 
         family = socket.AF_UNSPEC
         if len(ip_version_preference) == 1:
@@ -766,7 +795,6 @@ class DHEat:
 
     def _run(self) -> bool:
         '''Where all the magic happens.'''
-
 
         self.output()
         if sys.platform == "win32":
@@ -879,14 +907,16 @@ class DHEat:
                     self.num_connect_timeouts += thread_statistics['num_connect_timeouts']
                     self.num_read_timeouts += thread_statistics['num_read_timeouts']
                     self.num_socket_exceptions += thread_statistics['num_socket_exceptions']
-                    self.num_openssh_throttled_connections += thread_statistics['num_openssh_throttled_connections']
+                    self.num_em += thread_statistics['num_em']
+                    self.num_naatt += thread_statistics['num_naatt']
+                    self.num_invalid_banners += thread_statistics['num_invalid_banners']
             except queue.Empty:  # If Queue.get() timeout exceeded.
                 pass
 
             now = time.time()
             if (now - last_update) >= 1.0:
                 seconds_running = now - self.start_timer
-                print("%s%s%s TCP SYNs/sec: %s%u%s; Compl. conns/sec: %s%u%s; Bytes sent/sec: %s%s%s; DH kex/sec: %s%u%s    \r" % (self.WHITEB, spinner[spinner_index], self.CLEAR, self.BLUEB, self.num_attempted_tcp_connections / seconds_running, self.CLEAR, self.BLUEB, self.num_successful_tcp_connections / seconds_running, self.CLEAR, self.BLUEB, DHEat.add_byte_units(self.num_bytes_written / seconds_running), self.CLEAR, self.PURPLEB, self.num_successful_dh_kex / seconds_running, self.CLEAR), end="")
+                print(f"{self.WHITEB}{spinner[spinner_index]}{self.CLEAR} TCP SYNs/sec: {self.BLUEB}{int(self.num_attempted_tcp_connections / seconds_running):,d}{self.CLEAR}; Compl. conns/sec: {self.BLUEB}{self.num_successful_tcp_connections / seconds_running:,.1f}{self.CLEAR}; Bytes sent/sec: {self.BLUEB}{DHEat.add_byte_units(self.num_bytes_written / seconds_running)}{self.CLEAR}; DH kex/sec: {self.PURPLEB}{self.num_successful_dh_kex / seconds_running:,.1f}{self.CLEAR}    \r", end="")
                 last_update = now
                 spinner_index = (spinner_index + 1) % 4
 
@@ -934,13 +964,16 @@ class DHEat:
         num_connect_timeouts = 0
         num_read_timeouts = 0
         num_socket_exceptions = 0
-        num_openssh_throttled_connections = 0
+        num_em = 0     # Number of "Exceeded MaxStartups" messages received.
+        num_naatt = 0  # Number of "Not allowed at this time" messages received.
+        num_invalid_banners = 0
 
         num_loops_since_last_statistics_sync = 0
         while True:
             num_loops_since_last_statistics_sync += 1
 
             # Instead of flooding the parent process with statistics, report our stats only every 5 connections.
+            # TODO: this sends too quickly in the case of application-level rate limiting, resulting in client-side CPU exhaustion instead! :O  Perhaps a dynamic number of loops should be skipped, based on what would result in 1 message per 2-3 seconds.
             if num_loops_since_last_statistics_sync > 5:
                 num_loops_since_last_statistics_sync = 0
 
@@ -953,7 +986,9 @@ class DHEat:
                     'num_connect_timeouts': num_connect_timeouts,
                     'num_read_timeouts': num_read_timeouts,
                     'num_socket_exceptions': num_socket_exceptions,
-                    'num_openssh_throttled_connections': num_openssh_throttled_connections,
+                    'num_em': num_em,
+                    'num_naatt': num_naatt,
+                    'num_invalid_banners': num_invalid_banners
                 })
 
                 # Since we sent our statistics, reset them all back to zero.
@@ -965,7 +1000,9 @@ class DHEat:
                 num_connect_timeouts = 0
                 num_read_timeouts = 0
                 num_socket_exceptions = 0
-                num_openssh_throttled_connections = 0
+                num_em = 0
+                num_naatt = 0
+                num_invalid_banners = 0
 
             s = socket.socket(target_address_family, socket.SOCK_STREAM)
             s.settimeout(connect_timeout)
@@ -1008,11 +1045,16 @@ class DHEat:
             if banner.startswith(b"SSH-2.0-") or banner.startswith(b"SSH-1"):
                 num_successful_tcp_connections += 1
             elif banner == b'Exceeded MaxStartups':
-                num_openssh_throttled_connections += 1
+                num_em += 1
+                _close_socket(s)
+                continue
+            elif banner == b'Not allowed at this time':
+                num_naatt += 1
                 _close_socket(s)
                 continue
             else:
-                self.debug("Invalid banner received: %r" % banner)
+                num_invalid_banners += 1
+                # self.debug("Invalid banner received: %r" % banner)
                 _close_socket(s)
                 continue
 

@@ -35,7 +35,7 @@
 - historical information from OpenSSH, Dropbear SSH and libssh;
 - policy scans to ensure adherence to a hardened/standard configuration;
 - runs on Linux and Windows;
-- supports Python 3.9 - 3.13;
+- supports Python 3.10 - 3.14;
 - no dependencies
 
 ## Usage
@@ -48,10 +48,10 @@ usage: ssh-audit.py [-h] [-4] [-6] [-b] [-c] [-d]
                     [--conn-rate-test N[:max_rate]] [--dheat N[:kex[:e_len]]]
                     [--get-hardening-guide platform] [--list-hardening-guides]
                     [--lookup alg1[,alg2,...]] [--skip-rate-test]
-                    [--threads N]
+                    [--socks5 host:port] [--threads N]
                     [host]
 
-# ssh-audit.py v3.4.0-dev, https://github.com/jtesta/ssh-audit
+# ssh-audit.py v3.4.1-dev, https://github.com/jtesta/ssh-audit
 
 positional arguments:
   host                  target hostname or IPv4/IPv6 address
@@ -93,7 +93,8 @@ optional arguments:
                         used)
   -T targets.txt, --targets targets.txt
                         a file containing a list of target hosts (one per
-                        line, format HOST[:PORT]). Use -p/--port to set the
+                        line, format 'HOST[:PORT]'; for UNIX socket servers,
+                        use 'unix:///path/socket'). Use -p/--port to set the
                         default port for all hosts. Use --threads to control
                         concurrent scans
   -t N, --timeout N     timeout (in seconds) for connection and reading
@@ -127,6 +128,7 @@ optional arguments:
   --skip-rate-test      skip the connection rate test during standard audits
                         (used to safely infer whether the DHEat attack is
                         viable)
+  --socks5 host:port    connect via a SOCKS5 proxy (implies --skip-rate-test)
   --threads N           number of threads to use when scanning multiple
                         targets (-T/--targets) (default: 32)
 ```
@@ -142,6 +144,7 @@ ssh-audit 127.0.0.1
 ssh-audit 127.0.0.1:222
 ssh-audit ::1
 ssh-audit [::1]:222
+ssh-audit unix:///run/ssh-unix-local/socket
 ```
 
 To run a standard audit against many servers (place targets into servers.txt, one on each line in the format of `HOST[:PORT]`):
@@ -150,13 +153,13 @@ To run a standard audit against many servers (place targets into servers.txt, on
 ssh-audit -T servers.txt
 ```
 
-To audit a client configuration (listens on port 2222 by default; connect using `ssh -p 2222 anything@localhost`):
+To audit a client configuration (listens on port 2222/tcp by default; connect using `ssh -p 2222 anything@localhost`):
 
 ```
 ssh-audit -c
 ```
 
-To audit a client configuration, with a listener on port 4567:
+To audit a client configuration, with a listener on port 4567/tcp:
 ```
 ssh-audit -c -p 4567
 ```
@@ -236,9 +239,9 @@ $ snap install ssh-audit
 
 To install from Dockerhub:
 ```
-$ docker pull positronsecurity/ssh-audit
+$ docker pull docker.io/positronsecurity/ssh-audit
 ```
-(Then run with: `docker run -it --rm -p 2222:2222 positronsecurity/ssh-audit 10.1.1.1`)
+(Then run with: `docker run -it --rm -p 2222:2222 docker.io/positronsecurity/ssh-audit 10.1.1.1`)
 
 The status of various other platform packages can be found below (via Repology):
 
@@ -249,9 +252,14 @@ For convenience, a web front-end on top of the command-line tool is available at
 
 ## ChangeLog
 
-### v3.4.0-dev
+### v3.9.1-dev
+ - Fixed a perhaps rare crash when performing connection rate tests during standard audits.
+
+### v3.9.0 (2026-07-04)
  - BIG THANKS to [realmiwi](https://github.com/realmiwi) for being the project's *very first sponsor!!*
+ - Added support for Python 3.14.
  - Dropped support for Python 3.8, as it reached end-of-life in October 2024.
+ - Dropped support for Python 3.9, as it reached end-of-life in October 2025.
  - Added warning to all key exchanges that do not include protections against quantum attacks due to the Harvest Now, Decrypt Later strategy (see https://en.wikipedia.org/wiki/Harvest_now,_decrypt_later).
  - Removed SSHv1 support (rationale is documented in: https://github.com/jtesta/ssh-audit/issues/298).
  - Added hardening guides (see `--list-hardening-guides` and `--get-hardening-guide`).  Previously, they were only available at <https://ssh-audit.com/hardening_guides.html>, but now they are built-in for convenience; partial credit [oam7575](https://github.com/oam7575).
@@ -259,9 +267,15 @@ For convenience, a web front-end on top of the command-line tool is available at
  - Migrated from deprecated `getopt` module to `argparse`; partial credit [oam7575](https://github.com/oam7575).
  - When running against multiple hosts, now prints each target host regardless of output level.
  - Batch mode (`-b`) no longer automatically enables verbose mode, due to sometimes confusing results; users can still explicitly enable verbose mode using the `-v` flag.
- - Added built-in policy for OpenSSH 10.0.
+ - Added UNIX server socket scanning (specify the target with `unix:///path/to/socket`).
+ - Added SOCKS5 proxy support (specify the proxy with `--socks5 host:port`); partial credit [Michał Majchrowicz](https://github.com/sectroyer).
+ - Updated built-in policy for Debian 12.
+ - Added built-in policies for OpenSSH 10.0, 10.1, 10.2, 10.3, and 10.4.
  - Added hardening guides and policies for Debian 13.
+ - Added hardening guides and policies for Rocky Linux 10.
+ - Added hardening guides and policies for Ubuntu 26.04.
  - Added 2 new key exchanges: `mlkem768nistp256-sha256`, `mlkem1024nistp384-sha384`.
+ - Added 11 new host keys: `webauthn-sk-ecdsa-sha2-nistp256-cert-v01@openssh.com`, `mldsa-44`, `ssh-mldsa44-ed25519@openssh.com`, `mldsa-65`, `mldsa-87`, `ssh-mldsa-44`, `ssh-mldsa-65`, `ssh-mldsa-87`, `ssh-mldsa44`, `ssh-mldsa65`, `ssh-mldsa87`.
  - Added 2 new ciphers: `AEAD_CAMELLIA_128_GCM`, `AEAD_CAMELLIA_256_GCM`.
 
 ### v3.3.0 (2024-10-15)

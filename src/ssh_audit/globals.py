@@ -1,7 +1,7 @@
 """
    The MIT License (MIT)
 
-   Copyright (C) 2017-2024 Joe Testa (jtesta@positronsecurity.com)
+   Copyright (C) 2017-2026 Joe Testa (jtesta@positronsecurity.com)
 
    Permission is hereby granted, free of charge, to any person obtaining a copy
    of this software and associated documentation files (the "Software"), to deal
@@ -22,10 +22,10 @@
    THE SOFTWARE.
 """
 # The version to display.
-VERSION = 'v3.4.0-dev'
+VERSION = 'v3.9.1-dev'
 
 # SSH software to impersonate
-SSH_HEADER = 'SSH-{0}-OpenSSH_8.2'
+SSH_HEADER = 'SSH-{0}-OpenSSH_10.3'
 
 # The URL to the Github issues tracker.
 GITHUB_ISSUES_URL = 'https://github.com/jtesta/ssh-audit/issues'

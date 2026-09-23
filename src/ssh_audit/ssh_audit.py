@@ -2,7 +2,7 @@
 """
    The MIT License (MIT)
 
-   Copyright (C) 2017-2025 Joe Testa (jtesta@positronsecurity.com)
+   Copyright (C) 2017-2026 Joe Testa (jtesta@positronsecurity.com)
    Copyright (C) 2017 Andris Raugulis (moo@arthepsy.eu)
 
    Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -794,6 +794,7 @@ def process_commandline(out: OutputBuffer, args: List[str]) -> 'AuditConf':  # p
     parser.add_argument("--list-hardening-guides", action="store_true", dest="list_hardening_guides", default=False, help="list all official, built-in hardening guides for common systems.  Their full names can then be passed to --get-hardening-guide.  Add -v to this option to view hardening guide change logs and prior versions.")
     parser.add_argument("--lookup", action="store", dest="lookup", metavar="alg1[,alg2,...]", type=str, default=None, help="looks up an algorithm(s) without connecting to a server.")
     parser.add_argument("--skip-rate-test", action="store_true", dest="skip_rate_test", default=False, help="skip the connection rate test during standard audits (used to safely infer whether the DHEat attack is viable)")
+    parser.add_argument("--socks5", action="store", dest="socks5_proxy", metavar="host:port", type=str, default=None, help="connect via a SOCKS5 proxy (implies --skip-rate-test)")
     parser.add_argument("--threads", action="store", dest="threads", metavar="N", type=int, default=32, help="number of threads to use when scanning multiple targets (-T/--targets) (default: %(default)s)")
 
 
@@ -817,10 +818,16 @@ def process_commandline(out: OutputBuffer, args: List[str]) -> 'AuditConf':  # p
         aconf.list_policies = argument.list_policies
         aconf.manual = argument.manual
         aconf.skip_rate_test = argument.skip_rate_test
+        aconf.socks5_proxy = argument.socks5_proxy
         oport = argument.oport
 
         if argument.batch is True:
             aconf.batch = True
+
+        # Skip the rate test if we're using a SOCKS5 proxy.
+        if aconf.socks5_proxy is not None:
+            out.d("Disabling rate test since SOCKS5 proxy is set.", write_now=True)
+            aconf.skip_rate_test = True
 
         # If one -j was given, turn on JSON output.  If -jj was given, enable indentation.
         aconf.json = argument.json > 0
@@ -888,8 +895,8 @@ def process_commandline(out: OutputBuffer, args: List[str]) -> 'AuditConf':  # p
             aconf.verbose = True
             out.verbose = True
 
-    except argparse.ArgumentError as err:
-        out.fail(str(err), write_now=True)
+    except (argparse.ArgumentError, ValueError) as err:
+        out.fail(f"Error: {str(err)}", write_now=True)
         parser.print_help()
         sys.exit(exitcodes.UNKNOWN_ERROR)
 
@@ -915,19 +922,21 @@ def process_commandline(out: OutputBuffer, args: List[str]) -> 'AuditConf':  # p
         Hardening_Guides.print_hardening_guide(out, argument.get_hardening_guide)
         sys.exit(exitcodes.GOOD)
 
+    # If we're doing a server audit against a single target.
     if aconf.client_audit is False and aconf.target_file is None:
-        if oport is not None:
-            host = argument.host
-        else:
+        host = argument.host
+        if oport is None:
             host, port = Utils.parse_host_and_port(argument.host)
 
         if not host and aconf.target_file is None:
             out.fail("target host is not specified", write_now=True)
             sys.exit(exitcodes.UNKNOWN_ERROR)
 
-    if oport is None and aconf.client_audit:  # The default port to listen on during a client audit is 2222.
+    # For client audits, if an explicit port isn't set, default to 2222/tcp.
+    if aconf.client_audit and oport is None:
         port = 2222
 
+    # If an explicit port was set by the user, parse it.
     if oport is not None:
         port = Utils.parse_int(oport)
         if port < 1 or port > 65535:
@@ -1144,7 +1153,7 @@ def audit(out: OutputBuffer, aconf: AuditConf, print_target: bool = False) -> in
     out.debug = aconf.debug
     out.level = aconf.level
     out.use_colors = aconf.colors
-    s = SSH_Socket(out, aconf.host, aconf.port, aconf.ip_version_preference, aconf.timeout, aconf.timeout_set)
+    s = SSH_Socket(out, aconf.host, aconf.port, aconf.ip_version_preference, aconf.timeout, aconf.timeout_set, aconf.socks5_proxy)
 
     if aconf.client_audit:
         out.v("Listening for client connection on port %d..." % aconf.port, write_now=True)

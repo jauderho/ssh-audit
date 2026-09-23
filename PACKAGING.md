@@ -18,7 +18,7 @@ An executable can only be made on a Windows host because the PyInstaller tool (h
 To create package and upload to test server (hint: use API token for test.pypi.org):
 
 ```
-    $ sudo apt install python3-virtualenv python3.12-venv
+    $ sudo apt install python3-virtualenv python3.14-venv
     $ make -f Makefile.pypi
     $ make -f Makefile.pypi uploadtest
 ```
@@ -48,7 +48,7 @@ To download from production server and verify:
 
 # Snap
 
-To create the Snap package, run a fully-updated Ubuntu Server 24.04 VM.
+To create the Snap package, run a fully-updated Ubuntu Server 26.04 VM.
 
 Create the Snap package with:
 ```
@@ -68,9 +68,17 @@ Upload the Snap with:
 
 # Docker
 
-Ensure that the `buildx` plugin is available by following the installation instructions available at: https://docs.docker.com/engine/install/ubuntu/
+On an Ubuntu Server 26.06 VM, install dependencies with:
+```
+    # apt install docker.io docker-buildx
+```
 
-Build a local image with:
+Ensure that your non-root build user can access the docker daemon with by adding it to the `docker` group:
+```
+    # usermod -a -G docker build_user
+```
+
+As a non-root user, build a local image with:
 
 ```
     $ make -f Makefile.docker

@@ -117,8 +117,6 @@ class Algorithms:
             sshv, alg_db = alg_pair.sshv, alg_pair.db
             rec[sshv] = {}
             for alg_type, alg_list in alg_pair.items():
-                if alg_type == 'aut':
-                    continue
                 rec[sshv][alg_type] = {'add': {}, 'del': {}, 'chg': {}}
                 for n, alg_desc in alg_db[alg_type].items():
                     versions = alg_desc[0]
